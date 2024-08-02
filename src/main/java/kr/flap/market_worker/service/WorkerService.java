@@ -1,5 +1,6 @@
 package kr.flap.market_worker.service;
 
+import jakarta.annotation.PostConstruct;
 import kr.flap.market_worker.domain.Product;
 import kr.flap.market_worker.domain.ProductImage;
 import kr.flap.market_worker.dto.ImageUploadResponse;
@@ -7,7 +8,11 @@ import kr.flap.market_worker.repository.ProductImageRepository;
 import kr.flap.market_worker.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.ReadOffset;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -22,9 +27,39 @@ import java.util.Base64;
 @RequiredArgsConstructor
 public class WorkerService implements StreamListener<String, MapRecord<String, String, String>> {
 
+  @Autowired
+  private StringRedisTemplate redisTemplate;
+
+  @Value("${redis.stream.key}")
+  private String streamKey;
+
+  @Value("${redis.stream.group}")
+  private String groupName;
+
   private final NaverCloudService naverCloudService;
   private final ProductRepository productRepository;
   private final ProductImageRepository productImageRepository;
+
+  @PostConstruct
+  public void init() {
+    // 스트림 그룹 생성 및 확인 로직
+    try {
+      // 먼저 스트림이 존재하는지 확인합니다.
+      Boolean streamExists = redisTemplate.hasKey(streamKey);
+
+      if (Boolean.FALSE.equals(streamExists)) {
+        // 스트림이 존재하지 않으면 MKSTREAM을 사용하여 생성
+        redisTemplate.opsForStream().createGroup(streamKey, ReadOffset.latest(), groupName);
+        log.info("Stream '{}' created and group '{}' successfully created", streamKey, groupName);
+      }
+    } catch (Exception e) {
+      if (e.getMessage().contains("BUSYGROUP")) {
+        log.warn("Group '{}' already exists for stream '{}'", groupName, streamKey);
+      } else {
+        log.error("Failed to create stream group '{}': {}", groupName, e.getMessage());
+      }
+    }
+  }
 
   @Override
   public void onMessage(MapRecord<String, String, String> record) {

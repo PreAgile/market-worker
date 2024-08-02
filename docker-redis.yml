@@ -1,0 +1,7 @@
+services:
+  app:
+    image: redis:7.2.5
+    container_name: redis
+    ports:
+      - "7480:6379"
+    command: redis-server --maxmemory 2gb --maxmemory-policy noeviction
