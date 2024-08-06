@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.ByteArrayInputStream;
 import java.math.BigInteger;
 import java.util.Base64;
+import java.util.Collections;
 
 @Slf4j
 @Service
@@ -49,9 +50,14 @@ public class WorkerService implements StreamListener<String, MapRecord<String, S
 
       if (Boolean.FALSE.equals(streamExists)) {
         // 스트림이 존재하지 않으면 MKSTREAM을 사용하여 생성
-        redisTemplate.opsForStream().createGroup(streamKey, ReadOffset.latest(), groupName);
-        log.info("Stream '{}' created and group '{}' successfully created", streamKey, groupName);
+        redisTemplate.opsForStream().add(streamKey, Collections.singletonMap("init", "true"));
+        log.info("Stream '{}' created", streamKey);
       }
+
+      // 스트림 그룹 생성
+      redisTemplate.opsForStream().createGroup(streamKey, ReadOffset.latest(), groupName);
+      log.info("Group '{}' created for stream '{}'", groupName, streamKey);
+
     } catch (Exception e) {
       if (e.getMessage().contains("BUSYGROUP")) {
         log.warn("Group '{}' already exists for stream '{}'", groupName, streamKey);
@@ -60,6 +66,7 @@ public class WorkerService implements StreamListener<String, MapRecord<String, S
       }
     }
   }
+
 
   @Override
   public void onMessage(MapRecord<String, String, String> record) {
