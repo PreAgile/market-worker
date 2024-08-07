@@ -61,8 +61,6 @@ public class WorkerService implements StreamListener<String, MapRecord<String, S
     } catch (Exception e) {
       if (e.getMessage().contains("BUSYGROUP")) {
         log.warn("Group '{}' already exists for stream '{}'", groupName, streamKey);
-      } else {
-        log.error("Failed to create stream group '{}': {}", groupName, e.getMessage());
       }
     }
   }
