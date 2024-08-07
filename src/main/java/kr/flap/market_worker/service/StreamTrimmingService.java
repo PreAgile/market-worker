@@ -34,8 +34,12 @@ public class StreamTrimmingService {
         // 트리밍 전의 스트림 길이를 로그에 기록
         log.info("Trimming stream '{}' - current length: {}", streamKey, streamLength);
 
+
         // 스트림을 트리밍
+        log.info("Attempting to trim stream '{}' to max {} entries.", streamKey, maxMessageCount);
         Long trimmedLength = redisTemplate.opsForStream().trim(streamKey, maxMessageCount);
+        log.info("Stream '{}' trimmed. New length: {}", streamKey, trimmedLength);
+
 
         // 트리밍 후의 스트림 길이를 로그에 기록
         log.info("Stream '{}' trimmed to max {} entries. New length: {}", streamKey, maxMessageCount, trimmedLength);
