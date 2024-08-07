@@ -20,7 +20,7 @@ public class StreamTrimmingService {
   private String streamKey;
 
   // 설정한 최대 메시지 수 임계값
-  private final long maxMessageCount = 2000L;
+  private final long maxMessageCount = 1500L;
 
   // 스케줄러를 사용하여 주기적으로 트리밍 작업 수행
   @Scheduled(fixedRate = 5000) // 5초마다 실행
