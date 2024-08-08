@@ -12,11 +12,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.connection.stream.ReadOffset;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.io.ByteArrayInputStream;
 import java.math.BigInteger;
@@ -43,18 +43,14 @@ public class WorkerService implements StreamListener<String, MapRecord<String, S
 
   @PostConstruct
   public void init() {
-    // 스트림 그룹 생성 및 확인 로직
     try {
-      // 먼저 스트림이 존재하는지 확인합니다.
       Boolean streamExists = redisTemplate.hasKey(streamKey);
 
       if (Boolean.FALSE.equals(streamExists)) {
-        // 스트림이 존재하지 않으면 MKSTREAM을 사용하여 생성
         redisTemplate.opsForStream().add(streamKey, Collections.singletonMap("init", "true"));
         log.info("Stream '{}' created", streamKey);
       }
 
-      // 스트림 그룹 생성
       redisTemplate.opsForStream().createGroup(streamKey, ReadOffset.latest(), groupName);
       log.info("Group '{}' created for stream '{}'", groupName, streamKey);
 
@@ -64,7 +60,6 @@ public class WorkerService implements StreamListener<String, MapRecord<String, S
       }
     }
   }
-
 
   @Override
   public void onMessage(MapRecord<String, String, String> record) {
@@ -76,11 +71,15 @@ public class WorkerService implements StreamListener<String, MapRecord<String, S
 
       ImageUploadResponse response = naverCloudService.uploadImage(inputStream, "uploadedImage.png", decodedBytes.length, "image/png");
 
-      // 제품 업데이트 로직 호출
       updateProductWithImages(new BigInteger(productId), response);
 
     } catch (Exception e) {
       log.error("Failed to process image upload request", e);
+    } finally {
+      // 메시지 성공 여부와 관계없이 삭제
+      redisTemplate.opsForStream().acknowledge(streamKey, groupName, record.getId());
+      redisTemplate.opsForStream().delete(streamKey, record.getId());
+      log.info("Processed and deleted message with ID: {}", record.getId());
     }
   }
 
