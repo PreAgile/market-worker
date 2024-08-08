@@ -1,12 +1,18 @@
 package kr.flap.market_worker.service;
 
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Range;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StreamOperations;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+import java.util.List;
 
 @Service
 public class StreamTrimmingService {
@@ -14,42 +20,38 @@ public class StreamTrimmingService {
   private static final Logger log = LoggerFactory.getLogger(StreamTrimmingService.class);
 
   @Autowired
-  private StringRedisTemplate redisTemplate;
+  private RedisTemplate<String, String> redisTemplate;
 
   @Value("${redis.stream.key}")
   private String streamKey;
 
-  // 설정한 최대 메시지 수 임계값
-  private final long maxMessageCount = 1500L;
+  // TTL을 1분(60초)로 설정
+  private final long ttlInMillis = 60 * 1000;
 
   // 스케줄러를 사용하여 주기적으로 트리밍 작업 수행
-  @Scheduled(fixedRate = 5000) // 5초마다 실행
-  public void trimStream() {
+  @Scheduled(fixedRate = 60000) // 1분마다 실행
+  public void checkAndExpireMessages() {
     try {
-      // 현재 스트림의 크기 확인
-      Long streamLength = redisTemplate.opsForStream().size(streamKey);
+      StreamOperations<String, String, String> opsForStream = redisTemplate.opsForStream();
+      long currentTime = Instant.now().toEpochMilli();
 
-      // 스트림 길이가 임계값을 초과할 경우 트리밍 수행
-      if (streamLength != null && streamLength > maxMessageCount) {
-        // 트리밍 전의 스트림 길이를 로그에 기록
-        log.info("Trimming stream '{}' - current length: {}", streamKey, streamLength);
+      // 스트림에서 모든 메시지를 조회
+      List<MapRecord<String, String, String>> records = opsForStream.range(streamKey, Range.unbounded());
 
+      for (MapRecord<String, String, String> record : records) {
+        String timestampStr = record.getValue().get("timestamp");
 
-        // 스트림을 트리밍
-        log.info("Attempting to trim stream '{}' to max {} entries.", streamKey, maxMessageCount);
-        Long trimmedLength = redisTemplate.opsForStream().trim(streamKey, maxMessageCount);
-        log.info("Stream '{}' trimmed. New length: {}", streamKey, trimmedLength);
-
-
-        // 트리밍 후의 스트림 길이를 로그에 기록
-        log.info("Stream '{}' trimmed to max {} entries. New length: {}", streamKey, maxMessageCount, trimmedLength);
-      } else {
-        // 스트림 길이가 임계값 이하일 경우
-        log.info("Stream '{}' current length is {}, no trimming needed", streamKey, streamLength);
+        if (timestampStr != null) {
+          long messageTime = Long.parseLong(timestampStr);
+          if (currentTime - messageTime > ttlInMillis) {
+            // 만료된 메시지 삭제
+            opsForStream.delete(streamKey, record.getId());
+            log.info("Deleted expired message from stream '{}': {}", streamKey, record.getId());
+          }
+        }
       }
-
     } catch (Exception e) {
-      log.error("Failed to trim stream '{}': {}", streamKey, e.getMessage());
+      log.error("Failed to check and expire messages for stream '{}': {}", streamKey, e.getMessage());
     }
   }
 }
