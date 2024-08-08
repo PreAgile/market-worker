@@ -27,5 +27,5 @@ COPY src/main/resources/application-secret.properties /app/config/application-se
 # 컨테이너가 9292 포트를 외부에 노출하도록 설정합니다.
 EXPOSE 9292
 
-# 컨테이너가 시작될 때 실행할 명령을 정의합니다. java -jar app.jar 명령을 실행하여 JAR 파일을 실행합니다.
-ENTRYPOINT ["java", "-Xms2g", "-Xmx2g", "-Dspring.profiles.active=prod,secret", "-jar", "app.jar", "--spring.config.additional-location=file:/app/config/application-secret.properties"]
+# 컨테이너가 시작될 때 실행할 명령을 정의합니다.
+ENTRYPOINT ["java", "-Xms2g", "-Xmx2g", "-XX:+HeapDumpOnOutOfMemoryError", "-XX:HeapDumpPath=/app/heapdumps", "-Duser.timezone=Asia/Seoul", "-Dspring.profiles.active=prod,secret", "-jar", "app.jar", "--spring.config.additional-location=file:/app/config/application-secret.properties"]
